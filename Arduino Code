@@ -1,0 +1,165 @@
+#include <Servo.h> //library needed for servo
+#include <SPI.h>
+#include <MFRC522.h> //libraries required for RFID
+#define RST_PIN 3          
+#define SS_PIN 10 //defining pins needed to code to for RFID
+#include <Arduino.h>
+
+//defining pins and variables
+#define lirpin A4
+#define rirpin A5
+
+Servo servoLeft;
+Servo servoRight;
+
+void forward(){
+  servoLeft.writeMicroseconds(2000);
+  servoRight.writeMicroseconds(1000);
+}
+
+void turnleft(){
+  servoRight.writeMicroseconds(1000);
+  servoLeft.writeMicroseconds(1000);
+}
+
+void turnright(){
+  servoRight.writeMicroseconds(2000);
+  servoLeft.writeMicroseconds(2000);
+}
+
+void stop(){
+  servoLeft.writeMicroseconds(1500);
+  servoRight.writeMicroseconds(1500);
+}
+
+void backward(){
+  servoLeft.writeMicroseconds(1000);
+  servoRight.writeMicroseconds(2000);
+}
+
+int left;
+int right;
+
+const int out = 7;
+const int in = 2;
+const int leftTurn = 9;
+const int rightTurn = 8;
+
+MFRC522 RFID(SS_PIN, RST_PIN);
+byte CardUID[4] = {0x23, 0xAD, 0xDB, 0xC8}; //array for RFID code for the card
+byte FobUID[4] = {0x24, 0xF5, 0xFF, 0x95}; //array with RFID code for fob
+
+void setup() {
+  Serial.begin(9600);
+  servoRight.attach(6);
+  servoLeft.attach(5); //assigning servos to pins
+  SPI.begin();
+  RFID.PCD_Init(); //required initialization functions for RFID
+  pinMode(out, OUTPUT);
+  pinMode(in, INPUT);
+  pinMode(leftTurn, OUTPUT);
+  pinMode(rightTurn, OUTPUT);
+ 
+ pinMode(lirpin,INPUT);
+  pinMode(rirpin,INPUT);
+ }
+
+int pingDistance() { //function that enables ping sensor
+  digitalWrite(out, LOW);
+  delayMicroseconds(2);
+  digitalWrite(out, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(out, LOW); //sends out ping and turns off
+
+  long duration = pulseIn(in, HIGH); //receiving the pin back in and defining it as a variable
+  return duration;
+}
+
+void loop() {
+
+  if (RFID.PICC_IsNewCardPresent()) {
+      RFID.PICC_ReadCardSerial(); //required for RFID to function, if an RFID card is present the serial code is read
+  }
+
+  if(RFID.uid.uidByte[0] == CardUID[0] && RFID.uid.uidByte[1] == CardUID[1] && RFID.uid.uidByte[2] == CardUID[2] && RFID.uid.uidByte[3] == CardUID[3])
+  {// if statement making sure array for my specific rfid card matches the rfid read, checking each element one by one
+   // servoRight.writeMicroseconds(1000); //forward
+   // servoLeft.writeMicroseconds(2000);
+    Serial.println("card read");
+
+    int distance = pingDistance(); //running ping sensor function
+    Serial.println(distance);
+
+    int leftOrRight;
+    leftOrRight = random(2); //function for generating 2 random numbers from 0 to 1 in order to use for random turning
+    Serial.println("number changed");
+
+  left = digitalRead(lirpin);
+  right = digitalRead(rirpin);
+
+
+  if (left==1 && right==1){
+    forward();
+    Serial.println("detected by both");
+  }
+  // line detected by left sensor
+  else if (left==1 && right==0){
+    Serial.println("detected by left");
+    turnleft();
+  }
+  // line detected by right sensor
+  else if (left==0 && right==1){
+    Serial.println("detected by right");
+    turnright();
+  }
+  // line detected by none
+  else if (left==0 && right==0){
+    Serial.println("not detected by any");
+    backward();
+  }
+
+
+  while (true)
+  {
+    int distance = pingDistance(); //receiving ping measurements
+    Serial.println(distance);
+
+    if (distance > 750 && distance < 2000)
+      {
+        if (leftOrRight == 1) //checking if the random number generated matches
+          {
+          digitalWrite(rightTurn, HIGH); //right turn signal
+          delay(250);
+          digitalWrite(rightTurn, LOW);
+          delay(250);
+          }
+        else if (leftOrRight == 0)
+          {
+          digitalWrite(leftTurn, HIGH); //left turn signal
+          delay(250);
+          digitalWrite(leftTurn, LOW);
+          delay(250);
+        }
+        Serial.println("first if finished");
+      }
+     
+      if (leftOrRight == 0 && distance > 0 && distance < 750)
+        { //making sure the random number generated matches and the distance is closer then it can perform the turn corresponding with the turn signal
+            servoRight.writeMicroseconds(1000); //left turn
+            servoLeft.writeMicroseconds(1400);
+            delay(500);
+            Serial.println("turning left");
+            break;
+        }
+
+      else if (leftOrRight == 1 && distance > 0 && distance < 750)
+        { //same as above
+            servoRight.writeMicroseconds(1600); //right turn
+            servoLeft.writeMicroseconds(1900);
+            delay(500);
+            Serial.println("turning right");
+            break;
+        }
+    }
+  }
+  }
